@@ -5,12 +5,15 @@ import { useState } from "react";
 import { AuthGate } from "@/components/auth-gate";
 import { Button } from "@/components/ui/button";
 import { Folder, MoreHorizontal, PlusCircle, Trash2 } from "lucide-react";
-import { useCreateFolder, useFolders } from "@/modules/notes/hooks";
+import { useCreateFolder, useDeleteFolder, useFolders, useRenameFolder } from "@/modules/notes/hooks";
 
 export default function NotesPage() {
   const { data: folders = [] } = useFolders();
   const createFolder = useCreateFolder();
+  const renameFolder = useRenameFolder();
+  const deleteFolder = useDeleteFolder();
   const [creating, setCreating] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const handleCreate = async () => {
     const name = window.prompt("Tên thư mục mới", "Thư mục mới");
@@ -21,6 +24,20 @@ export default function NotesPage() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleRename = async (folderId: string, currentName: string) => {
+    const nextName = window.prompt("Đổi tên thư mục", currentName)?.trim();
+    setOpenMenuId(null);
+    if (!nextName || nextName === currentName) return;
+    await renameFolder.mutateAsync({ id: folderId, name: nextName });
+  };
+
+  const handleDelete = async (folderId: string, name: string) => {
+    const confirmed = window.confirm(`Xóa thư mục "${name}"? Ghi chú bên trong sẽ chuyển về Tất cả iCloud.`);
+    setOpenMenuId(null);
+    if (!confirmed) return;
+    await deleteFolder.mutateAsync(folderId);
   };
 
   return (
@@ -38,25 +55,52 @@ export default function NotesPage() {
           </Link>
 
           {folders.map((folder) => (
-            <Link
+            <div
               key={folder.id}
-              href={`/apps/notes/folder/${folder.id}`}
-              className="icloud-list-item flex items-center justify-between rounded-xl px-3 py-3 text-sm text-white"
+              className="icloud-list-item relative flex items-center justify-between rounded-xl px-3 py-3 text-sm text-white"
             >
-              <span className="flex items-center gap-2">
-                <Folder className="h-4 w-4 text-amber-300" />
-                {folder.name}
-              </span>
-              <MoreHorizontal className="h-4 w-4 text-muted" />
-            </Link>
+              <Link href={`/apps/notes/folder/${folder.id}`} className="flex min-w-0 flex-1 items-center gap-2 pr-3">
+                <Folder className="h-4 w-4 shrink-0 text-amber-300" />
+                <span className="truncate">{folder.name}</span>
+              </Link>
+              <button
+                type="button"
+                aria-label={`Tùy chọn cho ${folder.name}`}
+                className="rounded-full p-1 text-muted transition hover:bg-white/5 hover:text-white"
+                onClick={() => setOpenMenuId((current) => (current === folder.id ? null : folder.id))}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+              {openMenuId === folder.id ? (
+                <div className="absolute right-3 top-[calc(100%+4px)] z-20 min-w-[140px] rounded-2xl border border-white/10 bg-[#23252b] p-1.5 shadow-xl">
+                  <button
+                    type="button"
+                    className="w-full rounded-xl px-3 py-2 text-left text-sm text-white transition hover:bg-white/5"
+                    onClick={() => void handleRename(folder.id, folder.name)}
+                  >
+                    Đổi tên
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full rounded-xl px-3 py-2 text-left text-sm text-red-300 transition hover:bg-white/5"
+                    onClick={() => void handleDelete(folder.id, folder.name)}
+                  >
+                    Xóa
+                  </button>
+                </div>
+              ) : null}
+            </div>
           ))}
 
-          <div className="icloud-list-item flex items-center justify-between rounded-xl px-3 py-3 text-sm text-muted">
+          <Link
+            href="/apps/notes/deleted"
+            className="icloud-list-item flex items-center justify-between rounded-xl px-3 py-3 text-sm text-muted"
+          >
             <span className="flex items-center gap-2">
               <Trash2 className="h-4 w-4 text-amber-300" />
               Đã xóa gần đây
             </span>
-          </div>
+          </Link>
         </div>
 
         <div className="mt-6">

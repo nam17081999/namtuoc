@@ -1,13 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { MONEY_DENOMINATIONS } from "@/core/constants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAutosave } from "@/hooks/use-autosave";
+import { useLocalStorageState } from "@/hooks/use-local-storage-state";
 import { useCreateMoneySession, useMoneySessionItems, useMoneySessions, useUpsertMoneyItems } from "../hooks";
+
+const INACTIVITY_MS = 5 * 60 * 1000;
+const STORAGE_KEY = "money-counter-session-meta";
+
+type SessionMeta = {
+  trackedSessionId: string | null;
+  lastActivityAt: number | null;
+};
+
+const DEFAULT_META: SessionMeta = {
+  trackedSessionId: null,
+  lastActivityAt: null
+};
 
 export function MoneyCounterShell() {
   const { data: sessions = [] } = useMoneySessions();
@@ -15,9 +29,13 @@ export function MoneyCounterShell() {
   const { data: items = [] } = useMoneySessionItems(sessionId);
   const createSession = useCreateMoneySession();
   const upsertItems = useUpsertMoneyItems();
+  const [sessionMeta, setSessionMeta] = useLocalStorageState<SessionMeta>(STORAGE_KEY, DEFAULT_META);
 
   const [counts, setCounts] = useState<Record<number, number>>({});
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
+
+  const createSessionPromiseRef = useRef<Promise<string> | null>(null);
+  const rollingSessionRef = useRef(false);
 
   const sortedDenoms = useMemo(() => [...MONEY_DENOMINATIONS].sort((a, b) => b - a), []);
 
@@ -33,6 +51,7 @@ export function MoneyCounterShell() {
       setCounts({});
       return;
     }
+
     const next: Record<number, number> = {};
     items.forEach((item) => {
       next[item.denomination] = item.quantity;
@@ -47,21 +66,31 @@ export function MoneyCounterShell() {
     }, 0);
   }, [counts]);
 
-  const handleChange = (denom: number, value: string) => {
-    const qty = Math.max(0, Number.parseInt(value || "0", 10));
-    setCounts((prev) => ({ ...prev, [denom]: Number.isNaN(qty) ? 0 : qty }));
+  const hasAnyCount = useMemo(
+    () => MONEY_DENOMINATIONS.some((denom) => (counts[denom] ?? 0) > 0),
+    [counts]
+  );
+
+  const ensureSessionId = async () => {
+    if (sessionId) return sessionId;
+    if (createSessionPromiseRef.current) return createSessionPromiseRef.current;
+
+    createSessionPromiseRef.current = createSession.mutateAsync().then((session) => {
+      setSessionId(session.id);
+      return session.id;
+    }).finally(() => {
+      createSessionPromiseRef.current = null;
+    });
+
+    return createSessionPromiseRef.current;
   };
 
-  const handleReset = () => {
-    setCounts({});
-    setStatus("idle");
-  };
-
-  const handleNewSession = async () => {
-    const session = await createSession.mutateAsync();
-    setSessionId(session.id);
-    setCounts({});
-    setStatus("idle");
+  const markActivity = async () => {
+    const currentSessionId = await ensureSessionId();
+    setSessionMeta({
+      trackedSessionId: currentSessionId,
+      lastActivityAt: Date.now()
+    });
   };
 
   const saveSession = async () => {
@@ -72,6 +101,7 @@ export function MoneyCounterShell() {
       currentSessionId = session.id;
       setSessionId(session.id);
     }
+
     const payload = MONEY_DENOMINATIONS.map((denom) => ({
       denomination: denom,
       quantity: counts[denom] ?? 0
@@ -81,16 +111,191 @@ export function MoneyCounterShell() {
     setStatus("saved");
   };
 
+  const createFreshSession = async () => {
+    const session = await createSession.mutateAsync();
+    setSessionId(session.id);
+    setCounts({});
+    setStatus("idle");
+    setSessionMeta(DEFAULT_META);
+  };
+
+  const splitSessionIfInactive = async () => {
+    if (rollingSessionRef.current) return;
+    if (!sessionId) return;
+    if (sessionMeta.trackedSessionId !== sessionId || !sessionMeta.lastActivityAt) return;
+    if (Date.now() - sessionMeta.lastActivityAt < INACTIVITY_MS) return;
+
+    rollingSessionRef.current = true;
+    try {
+      if (hasAnyCount) {
+        await saveSession();
+      }
+      await createFreshSession();
+    } finally {
+      rollingSessionRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!sessionId) return;
+    if (sessionMeta.trackedSessionId !== sessionId || !sessionMeta.lastActivityAt) return;
+
+    const timeout = sessionMeta.lastActivityAt + INACTIVITY_MS - Date.now();
+    if (timeout <= 0) {
+      void splitSessionIfInactive();
+      return;
+    }
+
+    const handle = window.setTimeout(() => {
+      void splitSessionIfInactive();
+    }, timeout);
+
+    return () => window.clearTimeout(handle);
+  }, [sessionId, sessionMeta, hasAnyCount]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden" && hasAnyCount) {
+        void saveSession();
+      }
+      if (document.visibilityState === "visible") {
+        void splitSessionIfInactive();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [sessionId, sessionMeta, hasAnyCount]);
+
+  useEffect(() => {
+    const handlePageHide = () => {
+      if (hasAnyCount) {
+        void saveSession();
+      }
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, [hasAnyCount, counts, sessionId]);
+
+  const handleChange = (denom: number, value: string) => {
+    const qty = Math.max(0, Number.parseInt(value || "0", 10));
+    setCounts((prev) => ({ ...prev, [denom]: Number.isNaN(qty) ? 0 : qty }));
+    void markActivity();
+  };
+
+  const changeCountByStep = (denom: number, step: number) => {
+    setCounts((prev) => ({
+      ...prev,
+      [denom]: Math.max(0, (prev[denom] ?? 0) + step)
+    }));
+    void markActivity();
+  };
+
+  const handleReset = () => {
+    setCounts({});
+    setStatus("idle");
+    void markActivity();
+  };
+
+  const handleNewSession = async () => {
+    await createFreshSession();
+  };
+
   useAutosave(saveSession, 15000, [counts, sessionId]);
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4 rounded-3xl bg-background/60 p-4 shadow-sm ring-1 ring-border/40 lg:flex-row">
-      <div className="flex w-full flex-col gap-3 rounded-2xl bg-card/70 p-3 ring-1 ring-border/40 lg:w-[260px]">
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted">Phiên đã lưu</p>
-          <Button size="sm" variant="secondary" className="rounded-full px-3 text-[11px]" onClick={() => void handleNewSession()}>
+    <div className="mx-auto flex max-w-5xl flex-col gap-4 rounded-3xl bg-background/60 p-4 shadow-sm ring-1 ring-border/40">
+      <div className="flex flex-col gap-4">
+        <div>
+          <p className="text-xs font-medium text-muted">TỔNG TIỀN</p>
+          <p className="font-display text-4xl font-semibold tracking-tight text-text break-all">
+            {total.toLocaleString("vi-VN")} đ
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="rounded-full px-3 text-[11px] text-muted hover:text-text bg-card/60"
+            onClick={handleReset}
+          >
+            Reset
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="rounded-full px-4 text-xs font-medium shadow-sm"
+            onClick={() => void saveSession()}
+          >
+            Lưu ngay
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="rounded-full px-4 text-xs font-medium shadow-sm"
+            onClick={() => void handleNewSession()}
+          >
             Tạo phiên
           </Button>
+        </div>
+      </div>
+
+      <Card className="border-0 bg-card/80 shadow-none ring-1 ring-border/40">
+        <CardContent className="divide-y divide-border/60 p-0">
+          {sortedDenoms.map((denom) => (
+            <div key={denom} className="flex items-center justify-between gap-4 px-4 py-2.5">
+              <div className="flex flex-col">
+                <span className="text-[13px] font-medium text-text">{denom.toLocaleString("vi-VN")} đ</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 rounded-full px-0 text-muted hover:bg-card hover:text-text"
+                  onClick={() => changeCountByStep(denom, -1)}
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <Input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  className="h-8 w-16 px-1 rounded-2xl border-border/80 bg-background text-center text-sm font-medium"
+                  value={counts[denom] ?? ""}
+                  onChange={(event) => handleChange(denom, event.target.value)}
+                  placeholder="0"
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 rounded-full px-0 text-muted hover:bg-card hover:text-text"
+                  onClick={() => changeCountByStep(denom, 1)}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+                <span className="ml-1 w-3 text-[11px] text-muted">tờ</span>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <p className="text-[11px] text-muted">
+        {status === "saving"
+          ? "Đang lưu phiên..."
+          : status === "saved"
+            ? "Đã lưu tự động."
+            : "Tự lưu sau 15 giây. Sau 5 phút không đổi sẽ tách phiên mới."}
+      </p>
+
+      <div className="flex w-full flex-col gap-3 rounded-2xl bg-card/70 p-3 ring-1 ring-border/40">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted">Phiên đã lưu</p>
         </div>
         <div className="space-y-2">
           {sessions.length === 0 ? (
@@ -115,79 +320,6 @@ export function MoneyCounterShell() {
             ))
           )}
         </div>
-      </div>
-
-      <div className="flex w-full flex-col gap-4 lg:flex-1">
-        <div className="flex flex-col gap-4">
-          <div>
-            <p className="text-xs font-medium text-muted">TỔNG TIỀN</p>
-            <p className="font-display text-4xl font-semibold tracking-tight text-text break-all">
-              {total.toLocaleString("vi-VN")} đ
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="rounded-full px-3 text-[11px] text-muted hover:text-text bg-card/60"
-              onClick={handleReset}
-            >
-              Reset
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="rounded-full px-4 text-xs font-medium shadow-sm"
-              onClick={saveSession}
-            >
-              LƯU NGAY
-            </Button>
-          </div>
-        </div>
-
-        <Card className="border-0 bg-card/80 shadow-none ring-1 ring-border/40">
-          <CardContent className="divide-y divide-border/60 p-0">
-            {sortedDenoms.map((denom) => (
-              <div key={denom} className="flex items-center justify-between gap-4 px-4 py-2.5">
-                <div className="flex flex-col">
-                  <span className="text-[13px] font-medium text-text">{denom.toLocaleString("vi-VN")} đ</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-8 shrink-0 rounded-full px-0 text-muted hover:bg-card hover:text-text"
-                    onClick={() => setCounts((prev) => ({ ...prev, [denom]: Math.max(0, (prev[denom] ?? 0) - 1) }))}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <Input
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
-                    className="h-8 w-16 px-1 rounded-2xl border-border/80 bg-background text-center text-sm font-medium"
-                    value={counts[denom] ?? ""}
-                    onChange={(event) => handleChange(denom, event.target.value)}
-                    placeholder="0"
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-8 shrink-0 rounded-full px-0 text-muted hover:bg-card hover:text-text"
-                    onClick={() => setCounts((prev) => ({ ...prev, [denom]: (prev[denom] ?? 0) + 1 }))}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                  <span className="ml-1 w-3 text-[11px] text-muted">tờ</span>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <p className="text-[11px] text-muted">
-          {status === "saving" ? "Đang lưu phiên..." : status === "saved" ? "Đã lưu tự động." : "Tự lưu sau 15 giây."}
-        </p>
       </div>
     </div>
   );

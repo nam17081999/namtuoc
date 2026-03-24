@@ -27,10 +27,14 @@ export async function fetchNotes(params: { folderId?: string | null }) {
 }
 
 export async function fetchDeletedNotes() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+
   const { data, error } = await supabase
     .from("notes")
     .select("id, title, content, folder_id, updated_at, user_id, deleted_at")
     .not("deleted_at", "is", null)
+    .gte("deleted_at", cutoff.toISOString())
     .order("deleted_at", { ascending: false });
 
   if (error) throw error;
@@ -82,4 +86,20 @@ export async function createFolder(name: string) {
   const { data, error } = await supabase.from("note_folders").insert({ name }).select("id, name, user_id").single();
   if (error) throw error;
   return data as Folder;
+}
+
+export async function renameFolder(folderId: string, name: string) {
+  const { data, error } = await supabase
+    .from("note_folders")
+    .update({ name })
+    .eq("id", folderId)
+    .select("id, name, user_id")
+    .single();
+  if (error) throw error;
+  return data as Folder;
+}
+
+export async function deleteFolder(folderId: string) {
+  const { error } = await supabase.from("note_folders").delete().eq("id", folderId);
+  if (error) throw error;
 }

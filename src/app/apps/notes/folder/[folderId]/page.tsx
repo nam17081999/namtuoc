@@ -20,6 +20,10 @@ export default function NotesFolderPage() {
   const upsertNote = useUpsertNote();
   const [query, setQuery] = useState("");
 
+  const folderNameById = useMemo(() => {
+    return new Map(folders.map((folder) => [folder.id, folder.name]));
+  }, [folders]);
+
   const filteredNotes = useMemo(() => {
     const scoped = isAll ? notes : notes.filter((note) => note.folder_id === folderId);
     if (!query.trim()) return scoped;
@@ -61,22 +65,28 @@ export default function NotesFolderPage() {
         />
 
         <div className="space-y-3">
-          {filteredNotes.map((note, index) => (
-            <Link
-              key={note.id}
-              href={`/apps/notes/folder/${folderId}/note/${note.id}`}
-              className={`block rounded-2xl px-4 py-3 ${index === 0 ? "bg-amber-400 text-[#1b1c20]" : "bg-transparent text-white"}`}
-            >
-              <p className="text-sm font-semibold">{note.title ?? "Ghi chú mới"}</p>
-              <p className="mt-1 text-xs opacity-80">
-                {(note.content ?? "").replace(/<[^>]+>/g, "").slice(0, 48) || "Chưa có nội dung"}
-              </p>
-              <p className="mt-2 flex items-center gap-1 text-xs opacity-75">
-                <Folder className="h-3 w-3" />
-                {isAll ? "Ghi chú" : folderName}
-              </p>
-            </Link>
-          ))}
+          {filteredNotes.map((note, index) => {
+            const noteFolderName = note.folder_id ? folderNameById.get(note.folder_id) : null;
+
+            return (
+              <Link
+                key={note.id}
+                href={`/apps/notes/folder/${folderId}/note/${note.id}`}
+                className={`block rounded-2xl px-4 py-3 ${index === 0 ? "bg-amber-400 text-[#1b1c20]" : "bg-transparent text-white"}`}
+              >
+                <p className="text-sm font-semibold">{note.title ?? "Ghi chú mới"}</p>
+                <p className="mt-1 text-xs opacity-80">
+                  {(note.content ?? "").replace(/<[^>]+>/g, "").slice(0, 48) || "Chưa có nội dung"}
+                </p>
+                {noteFolderName ? (
+                  <p className="mt-2 flex items-center gap-1 text-xs opacity-75">
+                    <Folder className="h-3 w-3" />
+                    {noteFolderName}
+                  </p>
+                ) : null}
+              </Link>
+            );
+          })}
           {filteredNotes.length === 0 ? (
             <div className="rounded-2xl border border-white/5 bg-[#23252b] px-4 py-6 text-center text-sm text-muted">
               Chưa có ghi chú trong thư mục này

@@ -25,6 +25,7 @@ export default function NoteEditorInFolderPage() {
   const noteId = typeof params?.id === "string" ? params.id : "";
   const folderId = typeof params?.folderId === "string" ? params.folderId : "all";
   const isAll = folderId === "all";
+  const isDeleted = folderId === "deleted";
 
   const { data: note } = useNote(noteId);
   const upsertNote = useUpsertNote();
@@ -93,17 +94,19 @@ export default function NoteEditorInFolderPage() {
 
   const handleDelete = async () => {
     if (!noteId) return;
+    const confirmed = window.confirm("Bạn có chắc muốn xóa ghi chú này?");
+    if (!confirmed) return;
     await deleteNote.mutateAsync(noteId);
-    router.push(`/apps/notes/folder/${folderId}`);
+    router.push(isDeleted ? "/apps/notes/deleted" : `/apps/notes/folder/${folderId}`);
   };
 
   const handleCreate = async () => {
     const result = await upsertNote.mutateAsync({
       title: "Ghi chú mới",
       content: "",
-      folder_id: isAll ? null : folderId
+      folder_id: isAll || isDeleted ? null : folderId
     });
-    router.push(`/apps/notes/folder/${folderId}/note/${result.id}`);
+    router.push(isDeleted ? `/apps/notes/folder/all/note/${result.id}` : `/apps/notes/folder/${folderId}/note/${result.id}`);
   };
 
   const statusLabel = useMemo(() => {
@@ -117,7 +120,7 @@ export default function NoteEditorInFolderPage() {
       <div className="icloud-notes px-3 py-4 sm:px-5">
         <div className="mb-4 flex items-center justify-between text-amber-300">
           <div className="flex items-center gap-3">
-            <Link href={`/apps/notes/folder/${folderId}`} className="text-amber-300">
+            <Link href={isDeleted ? "/apps/notes/deleted" : `/apps/notes/folder/${folderId}`} className="text-amber-300">
               <ChevronLeft className="h-5 w-5" />
             </Link>
             <button type="button" onClick={handleDelete} aria-label="Xóa ghi chú" className="text-amber-300">

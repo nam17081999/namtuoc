@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/core/utils/cn";
 import { useAutosave } from "@/hooks/use-autosave";
@@ -26,6 +27,7 @@ const fontSizeClasses: Record<FontSize, string> = {
 };
 
 export function NotesShell() {
+  const router = useRouter();
   const { activeFolderId, activeNoteId, setActiveFolder, setActiveNote } = useNotesUIStore();
   const { data: folders = [] } = useFolders();
   const { data: notes = [] } = useNotes(activeFolderId);
@@ -82,6 +84,8 @@ export function NotesShell() {
 
   const handleDeleteNote = async () => {
     if (!activeNoteId) return;
+    const confirmed = window.confirm("Bạn có chắc muốn xóa ghi chú này?");
+    if (!confirmed) return;
     setSaveState("saving");
     await deleteNote.mutateAsync(activeNoteId);
     setActiveNote(null);
@@ -99,7 +103,12 @@ export function NotesShell() {
     <div className="mx-auto max-w-5xl space-y-4 rounded-3xl bg-background/60 p-4 shadow-sm ring-1 ring-border/40">
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
         <div className="icloud-sidebar rounded-2xl bg-card/70 p-3 ring-1 ring-border/40">
-          <FolderList folders={folders} activeFolderId={activeFolderId} onSelect={setActiveFolder} />
+          <FolderList
+            folders={folders}
+            activeFolderId={activeFolderId}
+            onSelect={setActiveFolder}
+            onOpenDeleted={() => router.push("/apps/notes/deleted")}
+          />
         </div>
 
         <div className="flex flex-col gap-3">
