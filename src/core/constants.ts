@@ -20,6 +20,13 @@
     description: "Quản lý tài sản và chi tiêu",
     imgSrc: "/images/finance.png"
   },
+  {
+    id: "photos",
+    name: "Ảnh",
+    href: "/apps/photos",
+    description: "Lưu ảnh và quản lý thư mục",
+    imgSrc: "/images/notes.png"
+  },
 ] as const;
 
 export const MONEY_DENOMINATIONS = [
