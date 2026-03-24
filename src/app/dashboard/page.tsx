@@ -76,7 +76,8 @@ function isFuzzyMatch(candidate: string, keyword: string) {
 function findCategoryByKeywords(text: string, maps: { category: string; keywords: string[] }[]) {
   const normalized = normalizeText(text);
   const candidates = buildPhraseCandidates(text);
-  let best: { category: string; score: number } | null = null;
+  let bestCategory: string | null = null;
+  let bestScore = -Infinity;
 
   maps.forEach((map) => {
     map.keywords.forEach((keyword) => {
@@ -84,8 +85,9 @@ function findCategoryByKeywords(text: string, maps: { category: string; keywords
       if (!key) return;
       if (normalized.includes(key)) {
         const score = key.length * 2;
-        if (!best || score > best.score) {
-          best = { category: map.category, score };
+        if (score > bestScore) {
+          bestScore = score;
+          bestCategory = map.category;
         }
         return;
       }
@@ -93,15 +95,16 @@ function findCategoryByKeywords(text: string, maps: { category: string; keywords
         if (isFuzzyMatch(candidate, key)) {
           const distance = levenshtein(candidate, key);
           const score = key.length - distance;
-          if (!best || score > best.score) {
-            best = { category: map.category, score };
+          if (score > bestScore) {
+            bestScore = score;
+            bestCategory = map.category;
           }
         }
       }
     });
   });
 
-  return best?.category ?? null;
+  return bestCategory;
 }
 
 function findCategoryByExisting(text: string, existing: Array<{ name: string }>) {
