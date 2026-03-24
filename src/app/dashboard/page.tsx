@@ -24,7 +24,7 @@ type SearchItem = {
   kind: "note" | "transaction" | "session";
   title: string;
   subtitle: string;
-  href: string;
+  href: "/apps/notes" | "/apps/finance" | "/apps/money-counter";
   date: number;
   onClick?: () => void;
 };
