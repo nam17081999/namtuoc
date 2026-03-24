@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Manrope, Sora } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
@@ -18,8 +18,28 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "iCloud",
-  description: "Bảng điều khiển cá nhân lấy cảm hứng từ iCloud Web"
+  title: "Nam Tước",
+  description: "Bảng điều khiển cá nhân lấy cảm hứng từ iCloud Web",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/images/finance.png",
+    apple: "/images/finance.png"
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Nam Tước"
+  },
+  formatDetection: {
+    telephone: false
+  }
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0b0b0f"
 };
 
 export default function RootLayout({
@@ -39,5 +59,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-
