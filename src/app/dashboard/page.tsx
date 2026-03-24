@@ -109,20 +109,22 @@ function findCategoryByKeywords(text: string, maps: { category: string; keywords
 
 function findCategoryByExisting(text: string, existing: Array<{ name: string }>) {
   const normalized = normalizeText(text);
-  let best: { category: string; score: number } | null = null;
+  let bestCategory: string | null = null;
+  let bestScore = -Infinity;
 
   existing.forEach((item) => {
     const key = normalizeText(item.name);
     if (!key) return;
     if (normalized.includes(key) || key.includes(normalized)) {
       const score = key.length;
-      if (!best || score > best.score) {
-        best = { category: item.name, score };
+      if (score > bestScore) {
+        bestScore = score;
+        bestCategory = item.name;
       }
     }
   });
 
-  return best?.category ?? null;
+  return bestCategory;
 }
 
 function stripHtml(value: string) {
