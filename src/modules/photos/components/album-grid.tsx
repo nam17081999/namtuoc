@@ -8,6 +8,7 @@ import type { PhotoFolder } from "../types";
 interface AlbumGridProps {
   folders: PhotoFolder[];
   photoCountByFolderId: Map<string, number>;
+  showPhotoCounts: boolean;
   getAlbumHref: (folderId: string) => Route;
   openAlbumMenuId: string | null;
   onToggleMenu: (folderId: string | null) => void;
@@ -18,6 +19,7 @@ interface AlbumGridProps {
 export function AlbumGrid({
   folders,
   photoCountByFolderId,
+  showPhotoCounts,
   getAlbumHref,
   openAlbumMenuId,
   onToggleMenu,
@@ -35,7 +37,9 @@ export function AlbumGrid({
             >
               <div className="mb-3 aspect-square rounded-2xl bg-background/70" />
               <p className="truncate text-sm font-medium text-text">{folder.name}</p>
-              <p className="text-[11px] text-muted">{photoCountByFolderId.get(folder.id) ?? 0} {"\u1ea3nh"}</p>
+              {showPhotoCounts ? (
+                <p className="text-[11px] text-muted">{photoCountByFolderId.get(folder.id) ?? 0} {"\u1ea3nh"}</p>
+              ) : null}
             </Link>
             <button
               type="button"

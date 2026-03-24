@@ -91,8 +91,8 @@ export function useMovePhoto() {
 export function useDeletePhoto() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (photo: Pick<PhotoItem, "id" | "file_path">) => deletePhoto(photo),
-    onSuccess: () => {
+    mutationFn: (photo: PhotoItem) => deletePhoto(photo),
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: photoKeys.all });
     }
   });

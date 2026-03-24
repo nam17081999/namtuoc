@@ -60,81 +60,126 @@ export function PhotoShell({ folderId = null }: PhotoShellProps = {}) {
     return map;
   }, [photos]);
 
+  const setActionError = (message: string) => {
+    setFeedback(message);
+  };
+
   const handleCreateAlbum = async () => {
     const name = albumName.trim();
-    if (!name) return;
-    await createFolder.mutateAsync(name);
-    setAlbumName("");
-    setFeedback("Đã tạo album.");
+    if (!name || createFolder.isPending) return;
+
+    try {
+      await createFolder.mutateAsync(name);
+      setAlbumName("");
+      setFeedback("Đã tạo album.");
+    } catch {
+      setActionError("Không thể tạo album.");
+    }
   };
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+
     setFeedback("Đang tải ảnh...");
 
-    for (const file of Array.from(files)) {
-      // eslint-disable-next-line no-await-in-loop
-      await uploadPhoto.mutateAsync({ file, folderId });
-    }
+    try {
+      for (const file of Array.from(files)) {
+        // eslint-disable-next-line no-await-in-loop
+        await uploadPhoto.mutateAsync({ file, folderId });
+      }
 
-    setFeedback("Đã tải ảnh.");
+      setFeedback("Đã tải ảnh.");
+    } catch {
+      setActionError("Không thể tải ảnh.");
+    }
   };
 
   const handleMove = async (photoId: string, nextFolderId: string) => {
-    await movePhoto.mutateAsync({
-      photoId,
-      folderId: nextFolderId === "unfiled" ? null : nextFolderId
-    });
-    setSelectedPhoto((current) =>
-      current && current.id === photoId
-        ? { ...current, folder_id: nextFolderId === "unfiled" ? null : nextFolderId }
-        : current
-    );
-    setFeedback("Đã chuyển ảnh.");
+    try {
+      await movePhoto.mutateAsync({
+        photoId,
+        folderId: nextFolderId === "unfiled" ? null : nextFolderId
+      });
+      setSelectedPhoto((current) =>
+        current && current.id === photoId
+          ? { ...current, folder_id: nextFolderId === "unfiled" ? null : nextFolderId }
+          : current
+      );
+      setFeedback("Đã chuyển ảnh.");
+    } catch {
+      setActionError("Không thể chuyển ảnh.");
+    }
   };
 
   const handleDeletePhoto = async (photo: PhotoItem) => {
     const confirmed = window.confirm("Xóa ảnh này?");
     if (!confirmed) return;
-    await deletePhoto.mutateAsync({ id: photo.id, file_path: photo.file_path });
-    setSelectedPhoto((current) => (current?.id === photo.id ? null : current));
-    setFeedback("Đã xóa ảnh.");
+
+    try {
+      await deletePhoto.mutateAsync(photo);
+      setSelectedPhoto((current) => (current?.id === photo.id ? null : current));
+      setFeedback("Đã xóa ảnh.");
+    } catch {
+      setActionError("Không thể xóa ảnh.");
+    }
   };
 
   const handleCopyUrl = async (url: string) => {
-    await navigator.clipboard.writeText(url);
-    setFeedback("Đã sao chép đường dẫn ảnh.");
+    try {
+      await navigator.clipboard.writeText(url);
+      setFeedback("Đã sao chép đường dẫn ảnh.");
+    } catch {
+      setActionError("Không thể sao chép đường dẫn ảnh.");
+    }
   };
 
   const handleShare = async (photo: PhotoItem) => {
-    if (navigator.share) {
-      await navigator.share({
-        title: photo.file_name,
-        url: photo.public_url
-      });
-      return;
-    }
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: photo.file_name,
+          url: photo.public_url
+        });
+        return;
+      }
 
-    await handleCopyUrl(photo.public_url);
+      await handleCopyUrl(photo.public_url);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
+
+      setActionError("Không thể chia sẻ ảnh.");
+    }
   };
 
   const handleRenameAlbum = async (nextFolderId: string, currentName: string) => {
     const nextName = window.prompt("Đổi tên album", currentName)?.trim();
     setOpenAlbumMenuId(null);
     if (!nextName || nextName === currentName) return;
-    await renameFolder.mutateAsync({ id: nextFolderId, name: nextName });
-    setFeedback("Đã đổi tên album.");
+
+    try {
+      await renameFolder.mutateAsync({ id: nextFolderId, name: nextName });
+      setFeedback("Đã đổi tên album.");
+    } catch {
+      setActionError("Không thể đổi tên album.");
+    }
   };
 
   const handleDeleteAlbum = async (nextFolderId: string, currentName: string) => {
     const confirmed = window.confirm(`Xóa album "${currentName}"? Ảnh bên trong sẽ chuyển về không thư mục.`);
     setOpenAlbumMenuId(null);
     if (!confirmed) return;
-    await deleteFolder.mutateAsync(nextFolderId);
-    setFeedback("Đã xóa album.");
 
-    if (folderId === nextFolderId) {
-      router.push("/apps/photos");
+    try {
+      await deleteFolder.mutateAsync(nextFolderId);
+      setFeedback("Đã xóa album.");
+
+      if (folderId === nextFolderId) {
+        router.push("/apps/photos");
+      }
+    } catch {
+      setActionError("Không thể xóa album.");
     }
   };
 
@@ -248,6 +293,11 @@ export function PhotoShell({ folderId = null }: PhotoShellProps = {}) {
     );
   }
 
+  const isShowingPhotosTab = activeTab === "photos";
+  const isRootLoading = isShowingPhotosTab ? photosQuery.isLoading : foldersQuery.isLoading;
+  const hasRootError = isShowingPhotosTab ? photosQuery.isError : foldersQuery.isError;
+  const canShowAlbumCounts = photosQuery.isSuccess;
+
   return (
     <div className="space-y-4">
       <PhotoShellToolbar
@@ -255,6 +305,7 @@ export function PhotoShell({ folderId = null }: PhotoShellProps = {}) {
         albumName={albumName}
         albumCount={folders.length}
         feedback={feedback}
+        isCreatingAlbum={createFolder.isPending}
         photoCount={photos.length}
         onTabChange={setActiveTab}
         onAlbumNameChange={setAlbumName}
@@ -262,12 +313,21 @@ export function PhotoShell({ folderId = null }: PhotoShellProps = {}) {
         onUpload={handleUpload}
       />
 
-      {activeTab === "photos" ? (
+      {isRootLoading ? (
+        <div className="rounded-3xl bg-card/70 p-8 text-center text-sm text-muted ring-1 ring-border/40">
+          {isShowingPhotosTab ? "Đang tải ảnh..." : "Đang tải album..."}
+        </div>
+      ) : hasRootError ? (
+        <div className="rounded-3xl bg-card/70 p-8 text-center text-sm text-muted ring-1 ring-border/40">
+          {isShowingPhotosTab ? "Không thể tải thư viện ảnh lúc này." : "Không thể tải album lúc này."}
+        </div>
+      ) : isShowingPhotosTab ? (
         <PhotoGrid photos={photos} onOpenPhoto={setSelectedPhoto} />
       ) : (
         <AlbumGrid
           folders={folders}
           photoCountByFolderId={photoCountByFolderId}
+          showPhotoCounts={canShowAlbumCounts}
           getAlbumHref={(nextFolderId) => `/apps/photos/album/${nextFolderId}` as Route}
           openAlbumMenuId={openAlbumMenuId}
           onToggleMenu={setOpenAlbumMenuId}

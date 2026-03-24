@@ -13,6 +13,7 @@ interface PhotoShellToolbarProps {
   albumName: string;
   albumCount: number;
   feedback: string | null;
+  isCreatingAlbum: boolean;
   photoCount: number;
   onTabChange: (tab: TabKey) => void;
   onAlbumNameChange: (value: string) => void;
@@ -25,6 +26,7 @@ export function PhotoShellToolbar({
   albumName,
   albumCount,
   feedback,
+  isCreatingAlbum,
   photoCount,
   onTabChange,
   onAlbumNameChange,
@@ -78,6 +80,7 @@ export function PhotoShellToolbar({
             variant="secondary"
             size="sm"
             className="h-9 rounded-full px-3 shadow-none"
+            disabled={isCreatingAlbum}
             onClick={() => void onCreateAlbum()}
           >
             <Plus className="mr-1.5 h-4 w-4" />
@@ -109,12 +112,14 @@ export function PhotoShellToolbar({
             aria-label={"T\u00ean album m\u1edbi"}
             placeholder="T\u00ean album m\u1edbi"
             value={albumName}
+            disabled={isCreatingAlbum}
             onChange={(event) => onAlbumNameChange(event.target.value)}
           />
           <Button
             variant="secondary"
             size="sm"
             className="h-9 rounded-full px-3 shadow-none"
+            disabled={isCreatingAlbum}
             onClick={() => void onCreateAlbum()}
           >
             <FolderPlus className="mr-1.5 h-4 w-4" />
