@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 import {
@@ -47,19 +47,19 @@ export function PhotoShell() {
     if (!name) return;
     await createFolder.mutateAsync(name);
     setAlbumName("");
-    setFeedback("Đã tạo album.");
+    setFeedback("\u0110\u00e3 t\u1ea1o album.");
   };
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    setFeedback("Đang tải ảnh...");
+    setFeedback("\u0110ang t\u1ea3i \u1ea3nh...");
 
     for (const file of Array.from(files)) {
       // eslint-disable-next-line no-await-in-loop
       await uploadPhoto.mutateAsync({ file, folderId: null });
     }
 
-    setFeedback("Đã tải ảnh.");
+    setFeedback("\u0110\u00e3 t\u1ea3i \u1ea3nh.");
   };
 
   const handleMove = async (photoId: string, nextFolderId: string) => {
@@ -72,20 +72,20 @@ export function PhotoShell() {
         ? { ...current, folder_id: nextFolderId === "unfiled" ? null : nextFolderId }
         : current
     );
-    setFeedback("Đã chuyển ảnh.");
+    setFeedback("\u0110\u00e3 chuy\u1ec3n \u1ea3nh.");
   };
 
   const handleDeletePhoto = async (photo: PhotoItem) => {
-    const confirmed = window.confirm("Xóa ảnh này?");
+    const confirmed = window.confirm("X\u00f3a \u1ea3nh n\u00e0y?");
     if (!confirmed) return;
     await deletePhoto.mutateAsync({ id: photo.id, file_path: photo.file_path });
     setSelectedPhoto((current) => (current?.id === photo.id ? null : current));
-    setFeedback("Đã xóa ảnh.");
+    setFeedback("\u0110\u00e3 x\u00f3a \u1ea3nh.");
   };
 
   const handleCopyUrl = async (url: string) => {
     await navigator.clipboard.writeText(url);
-    setFeedback("Đã sao chép đường dẫn ảnh.");
+    setFeedback("\u0110\u00e3 sao ch\u00e9p \u0111\u01b0\u1eddng d\u1eabn \u1ea3nh.");
   };
 
   const handleShare = async (photo: PhotoItem) => {
@@ -101,19 +101,19 @@ export function PhotoShell() {
   };
 
   const handleRenameAlbum = async (folderId: string, currentName: string) => {
-    const nextName = window.prompt("Đổi tên album", currentName)?.trim();
+    const nextName = window.prompt("\u0110\u1ed5i t\u00ean album", currentName)?.trim();
     setOpenAlbumMenuId(null);
     if (!nextName || nextName === currentName) return;
     await renameFolder.mutateAsync({ id: folderId, name: nextName });
-    setFeedback("Đã đổi tên album.");
+    setFeedback("\u0110\u00e3 \u0111\u1ed5i t\u00ean album.");
   };
 
   const handleDeleteAlbum = async (folderId: string, currentName: string) => {
-    const confirmed = window.confirm(`Xóa album "${currentName}"? Ảnh bên trong sẽ chuyển về không thư mục.`);
+    const confirmed = window.confirm(`X\u00f3a album "${currentName}"? \u1ea2nh b\u00ean trong s\u1ebd chuy\u1ec3n v\u1ec1 kh\u00f4ng th\u01b0 m\u1ee5c.`);
     setOpenAlbumMenuId(null);
     if (!confirmed) return;
     await deleteFolder.mutateAsync(folderId);
-    setFeedback("Đã xóa album.");
+    setFeedback("\u0110\u00e3 x\u00f3a album.");
   };
 
   return (
@@ -121,7 +121,9 @@ export function PhotoShell() {
       <PhotoShellToolbar
         activeTab={activeTab}
         albumName={albumName}
+        albumCount={folders.length}
         feedback={feedback}
+        photoCount={photos.length}
         onTabChange={setActiveTab}
         onAlbumNameChange={setAlbumName}
         onCreateAlbum={handleCreateAlbum}
