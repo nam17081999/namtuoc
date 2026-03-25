@@ -35,7 +35,6 @@ export function PhotoShellToolbar({
 }: PhotoShellToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const isPhotosTab = activeTab === "photos";
-  const title = isPhotosTab ? "T\u1ea5t c\u1ea3 \u1ea3nh" : "Album";
   const countLabel = isPhotosTab ? `${photoCount} \u1ea3nh` : `${albumCount} album`;
 
   return (
@@ -48,7 +47,6 @@ export function PhotoShellToolbar({
             ) : (
               <FolderPlus className="h-4 w-4 text-muted" />
             )}
-            <h1 className="text-[1.35rem] font-semibold tracking-tight text-text">{title}</h1>
           </div>
           <p className="mt-0.5 text-[11px] text-muted">{countLabel}</p>
         </div>
