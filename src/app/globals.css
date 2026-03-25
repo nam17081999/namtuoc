@@ -4,6 +4,9 @@
 
 :root {
   color-scheme: dark;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --topbar-height: 44px;
+  --topbar-offset: calc(var(--safe-top) + var(--topbar-height));
 }
 
 * {
@@ -109,7 +112,7 @@ button {
 
 .icloud-notes {
   background: #1c1c1e;
-  min-height: calc(100dvh - 44px);
+  min-height: calc(100dvh - var(--topbar-offset));
 }
 
 .icloud-sidebar {

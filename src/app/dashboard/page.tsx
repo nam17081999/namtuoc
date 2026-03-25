@@ -12,10 +12,10 @@ import { Segmented } from "@/components/ui/segmented";
 import { formatMoneyGroupedSpaces } from "@/core/utils/format-money";
 import { EXPENSE_CATEGORY_KEYWORDS, INCOME_CATEGORY_KEYWORDS } from "@/modules/finance/category-keywords";
 import { useAccounts, useCategories, useCreateAccount, useCreateTransaction, useTransactions } from "@/modules/finance/hooks";
-import { useNotes, useUpsertNote } from "@/modules/notes/hooks";
 import { useMoneySessions } from "@/modules/money-counter/hooks";
-import { useNotesUIStore } from "@/store/notes-store";
+import { useNotes, useUpsertNote } from "@/modules/notes/hooks";
 import type { Account } from "@/modules/finance/types";
+import { useNotesUIStore } from "@/store/notes-store";
 
 type QuickType = "expense" | "income" | "note";
 
@@ -136,25 +136,19 @@ function escapeHtml(value: string) {
 }
 
 function parseMoneyInput(raw: string) {
-  const cleaned = raw
-    .trim()
-    .replace(/^(chi|thu)\s+/i, "")
-    .replace(/^note:\s*/i, "");
+  const cleaned = raw.trim().replace(/^(chi|thu)\s+/i, "").replace(/^note:\s*/i, "");
   const match = cleaned.match(/([0-9]+(?:[.,][0-9]+)?)\s*(k|m|tr)?/i);
   if (!match) return null;
   const suffix = match[2]?.toLowerCase();
   const rawNumber = match[1];
   const parsed = Number.parseFloat(rawNumber.replace(",", "."));
-  const amount = suffix
-    ? Math.round(parsed * (suffix === "k" ? 1000 : 1_000_000))
-    : Math.round(parsed * 1000);
+  const amount = suffix ? Math.round(parsed * (suffix === "k" ? 1000 : 1_000_000)) : Math.round(parsed * 1000);
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const note = cleaned.replace(match[0], "").trim();
   return { amount, note };
 }
 
 export default function DashboardPage() {
-
   const { data: transactions = [] } = useTransactions();
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
@@ -170,7 +164,6 @@ export default function DashboardPage() {
   const [quickText, setQuickText] = useState("");
   const [quickStatus, setQuickStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [quickError, setQuickError] = useState<string | null>(null);
-
   const [searchQuery, setSearchQuery] = useState("");
 
   const resolveCashAccount = async (): Promise<Account> => {
@@ -283,6 +276,41 @@ export default function DashboardPage() {
   return (
     <AuthGate>
       <main className="mx-auto flex min-h-[calc(100dvh-44px)] w-full max-w-6xl flex-col gap-8 px-4 pb-8 pt-6 sm:px-6 lg:px-10">
+        <section className="rounded-[28px] border border-white/10 bg-surface/80 p-4 shadow-sm backdrop-blur-xl sm:p-5">
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-amber-300" />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted">Tìm kiếm</p>
+              <p className="text-[12px] text-muted">Tìm ghi chú, giao dịch, phiên đếm tiền</p>
+            </div>
+          </div>
+          <div className="mt-3">
+            <Input placeholder="Nhập từ khóa" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+          </div>
+          <div className="mt-3 space-y-2">
+            {searchQuery.trim().length < 2 ? (
+              <p className="text-[12px] text-muted">Nhập từ 2 ký tự để tìm.</p>
+            ) : searchResults.length === 0 ? (
+              <p className="text-[12px] text-muted">Không tìm thấy.</p>
+            ) : (
+              searchResults.map((item) => (
+                <Link
+                  key={`${item.kind}-${item.id}`}
+                  href={item.href}
+                  className="flex items-center justify-between rounded-2xl bg-card/70 px-3 py-2 text-[12px] text-text ring-1 ring-border/40"
+                  onClick={item.onClick}
+                >
+                  <div className="flex flex-col">
+                    <span className="font-medium">{item.title}</span>
+                    <span className="text-[11px] text-muted">{item.subtitle}</span>
+                  </div>
+                  <ArrowDownUp className="h-4 w-4 text-muted" />
+                </Link>
+              ))
+            )}
+          </div>
+        </section>
+
         <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
           <div className="space-y-4">
             <div className="rounded-[28px] border border-white/10 bg-surface/80 p-4 shadow-sm backdrop-blur-xl sm:p-5">
@@ -324,45 +352,8 @@ export default function DashboardPage() {
 
           <div className="space-y-4">
             <div className="rounded-[28px] border border-white/10 bg-surface/80 p-4 shadow-sm backdrop-blur-xl sm:p-5">
-              <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-amber-300" />
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted">Tìm kiếm</p>
-                  <p className="text-[12px] text-muted">Tìm ghi chú, giao dịch, phiên đếm tiền</p>
-                </div>
-              </div>
-              <div className="mt-3">
-                <Input placeholder="Nhập từ khóa" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-              </div>
-              <div className="mt-3 space-y-2">
-                {searchQuery.trim().length < 2 ? (
-                  <p className="text-[12px] text-muted">Nhập từ 2 ký tự để tìm.</p>
-                ) : searchResults.length === 0 ? (
-                  <p className="text-[12px] text-muted">Không tìm thấy.</p>
-                ) : (
-                  searchResults.map((item) => (
-                    <Link
-                      key={`${item.kind}-${item.id}`}
-                      href={item.href}
-                      className="flex items-center justify-between rounded-2xl bg-card/70 px-3 py-2 text-[12px] text-text ring-1 ring-border/40"
-                      onClick={item.onClick}
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-medium">{item.title}</span>
-                        <span className="text-[11px] text-muted">{item.subtitle}</span>
-                      </div>
-                      <ArrowDownUp className="h-4 w-4 text-muted" />
-                    </Link>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-white/10 bg-surface/80 p-4 shadow-sm backdrop-blur-xl sm:p-5">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.25em] text-muted sm:text-[11px]">
-                  Danh sách ứng dụng
-                </h2>
+                <h2 className="text-xs font-semibold uppercase tracking-[0.25em] text-muted sm:text-[11px]">Danh sách ứng dụng</h2>
               </div>
               <div className="grid grid-cols-4 gap-x-2 gap-y-4 sm:gap-x-6 sm:gap-y-6">
                 {APP_LIST.map((app, index) => (

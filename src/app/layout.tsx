@@ -55,7 +55,7 @@ export default function RootLayout({
         <Providers>
           <RoutePrefetch />
           <GlobalNavbar />
-          <div className="pt-[44px]">{children}</div>
+          <div style={{ paddingTop: "var(--topbar-offset)" }}>{children}</div>
         </Providers>
       </body>
     </html>

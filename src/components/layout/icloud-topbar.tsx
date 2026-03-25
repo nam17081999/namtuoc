@@ -13,11 +13,15 @@ export function IcloudTopbar({ appName, variant = "blue" }: IcloudTopbarProps) {
   return (
     <div
       className={cn(
-        "fixed inset-x-0 top-0 z-50 h-[44px] bg-black/40 text-white backdrop-blur-xl border-b border-white/10",
+        "fixed inset-x-0 top-0 z-50 bg-black/40 text-white backdrop-blur-xl border-b border-white/10",
         "bg-black/40 backdrop-blur-xl border-b border-white/10"
       )}
+      style={{
+        paddingTop: "var(--safe-top)",
+        height: "var(--topbar-offset)"
+      }}
     >
-      <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-[var(--topbar-height)] w-full max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-1.5 text-[16px] font-semibold tracking-tight sm:gap-2 sm:text-[17px]">
           <Link href="/">iCloud</Link>
           {appName ? <span className="font-normal text-gray-400">{appName}</span> : null}
