@@ -25,7 +25,7 @@
     name: "Ảnh",
     href: "/apps/photos",
     description: "Lưu ảnh và quản lý thư mục",
-    imgSrc: "/images/notes.png"
+    imgSrc: "/images/photos.png"
   },
 ] as const;
 

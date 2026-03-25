@@ -8,7 +8,8 @@ const APP_LABELS: Record<string, string> = {
   "/dashboard": "",
   "/apps/notes": "Ghi chú",
   "/apps/money-counter": "Đếm tiền",
-  "/apps/finance": "Tài chính"
+  "/apps/finance": "Tài chính",
+  "/apps/photos": "Ảnh"
 };
 
 const DARK_PATHS = ["/apps/notes", "/apps/money-counter", "/apps/finance"];

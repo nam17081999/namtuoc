@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { Route } from "next";
 import Link from "next/link";
-import { MoreHorizontal } from "lucide-react";
+import { FolderOpen, MoreHorizontal, Sparkles } from "lucide-react";
 import type { PhotoFolder } from "../types";
 
 interface AlbumGridProps {
@@ -26,25 +27,80 @@ export function AlbumGrid({
   onRenameAlbum,
   onDeleteAlbum
 }: AlbumGridProps) {
+  const activeMenuRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!openAlbumMenuId) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (!activeMenuRef.current) return;
+      if (activeMenuRef.current.contains(event.target as Node)) return;
+      onToggleMenu(null);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [onToggleMenu, openAlbumMenuId]);
+
+  if (folders.length === 0) {
+    return (
+      <div className="rounded-[30px] border border-border/40 bg-card/75 p-10 text-center shadow-[0_24px_80px_rgba(0,0,0,0.16)] backdrop-blur">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-background/80 text-muted">
+          <FolderOpen className="h-6 w-6" />
+        </div>
+        <p className="text-base font-medium text-text">Chưa có album nào</p>
+        <p className="mt-1 text-sm text-muted">Tạo album đầu tiên để gom ảnh theo chủ đề hoặc công việc.</p>
+      </div>
+    );
+  }
+
   return (
-    <>
-      <div className="grid grid-cols-3 gap-3">
-        {folders.map((folder) => (
-          <div key={folder.id} className="relative rounded-2xl bg-card/70 p-3 ring-1 ring-border/40">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {folders.map((folder) => {
+        const photoCount = showPhotoCounts ? photoCountByFolderId.get(folder.id) ?? 0 : null;
+
+        return (
+          <article
+            key={folder.id}
+            ref={openAlbumMenuId === folder.id ? activeMenuRef : null}
+            className="group relative overflow-visible rounded-[30px] border border-border/40 bg-card/75 p-3 shadow-[0_24px_80px_rgba(0,0,0,0.16)] backdrop-blur transition"
+          >
             <Link
               href={getAlbumHref(folder.id)}
-              className="mb-8 block rounded-[1.125rem] transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+              className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
             >
-              <div className="mb-3 aspect-square rounded-2xl bg-background/70" />
-              <p className="truncate text-sm font-medium text-text">{folder.name}</p>
-              {showPhotoCounts ? (
-                <p className="text-[11px] text-muted">{photoCountByFolderId.get(folder.id) ?? 0} {"\u1ea3nh"}</p>
-              ) : null}
+              <div className="relative overflow-hidden rounded-[24px] bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.16),_transparent_42%),linear-gradient(135deg,rgba(106,162,255,0.28),rgba(255,255,255,0.03)_52%,rgba(83,208,186,0.18))] p-5">
+                <div className="absolute inset-0 opacity-60 [background-image:linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:22px_22px]" />
+                <div className="relative flex aspect-[4/3] flex-col justify-between">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-black/20 text-white backdrop-blur">
+                      <FolderOpen className="h-5 w-5" />
+                    </div>
+                    <div className="inline-flex items-center gap-1 rounded-full bg-black/20 px-2.5 py-1 text-[11px] text-white/80 backdrop-blur">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Album
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <p className="truncate text-lg font-semibold text-white">{folder.name}</p>
+                    <p className="mt-1 text-sm text-white/72">
+                      {photoCount !== null ? `${photoCount} ảnh` : "Mở để xem nội dung"}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </Link>
+
             <button
               type="button"
-              aria-label={`T\u00f9y ch\u1ecdn cho album ${folder.name}`}
-              className="absolute right-2 top-2 rounded-full p-1 text-muted transition hover:bg-white/5 hover:text-white"
+              aria-label={`Tùy chọn cho album ${folder.name}`}
+              className="absolute right-5 top-5 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/20 text-white/80 backdrop-blur transition hover:bg-black/30 hover:text-white focus:outline-none focus-visible:outline-none focus-visible:ring-0"
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -53,33 +109,28 @@ export function AlbumGrid({
             >
               <MoreHorizontal className="h-4 w-4" />
             </button>
+
             {openAlbumMenuId === folder.id ? (
-              <div className="absolute right-2 top-10 z-20 min-w-[140px] rounded-2xl border border-white/10 bg-[#23252b] p-1.5 shadow-xl">
+              <div className="absolute right-4 top-16 z-20 min-w-[160px] rounded-2xl border border-white/10 bg-[#23252b]/95 p-1.5 shadow-2xl backdrop-blur">
                 <button
                   type="button"
                   className="w-full rounded-xl px-3 py-2 text-left text-sm text-white transition hover:bg-white/5"
                   onClick={() => onRenameAlbum(folder)}
                 >
-                  {"\u0110\u1ed5i t\u00ean"}
+                  Đổi tên
                 </button>
                 <button
                   type="button"
                   className="w-full rounded-xl px-3 py-2 text-left text-sm text-red-300 transition hover:bg-white/5"
                   onClick={() => onDeleteAlbum(folder)}
                 >
-                  {"X\u00f3a album"}
+                  Xóa album
                 </button>
               </div>
             ) : null}
-          </div>
-        ))}
-      </div>
-
-      {folders.length === 0 ? (
-        <div className="rounded-3xl bg-card/70 p-8 text-center text-sm text-muted ring-1 ring-border/40">
-          {"Ch\u01b0a c\u00f3 album n\u00e0o."}
-        </div>
-      ) : null}
-    </>
+          </article>
+        );
+      })}
+    </div>
   );
 }

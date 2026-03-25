@@ -7,7 +7,7 @@ import { PhotoShell } from "@/modules/photos/components/photo-shell";
 export default function PhotosPage() {
   return (
     <AuthGate>
-      <AppShell title={"Ảnh"} subtitle={"Lưu ảnh, quản lý album và lấy đường dẫn nhanh."}>
+      <AppShell>
         <PhotoShell />
       </AppShell>
     </AuthGate>

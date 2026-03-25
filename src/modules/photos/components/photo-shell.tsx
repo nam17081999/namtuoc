@@ -32,6 +32,7 @@ export function PhotoShell({ folderId = null }: PhotoShellProps = {}) {
   const [activeTab, setActiveTab] = useState<TabKey>("photos");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [albumName, setAlbumName] = useState("");
+  const [isAlbumComposerOpen, setIsAlbumComposerOpen] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null);
   const [openAlbumMenuId, setOpenAlbumMenuId] = useState<string | null>(null);
 
@@ -71,6 +72,7 @@ export function PhotoShell({ folderId = null }: PhotoShellProps = {}) {
     try {
       await createFolder.mutateAsync(name);
       setAlbumName("");
+      setIsAlbumComposerOpen(false);
       setFeedback("Đã tạo album.");
     } catch {
       setActionError("Không thể tạo album.");
@@ -287,7 +289,6 @@ export function PhotoShell({ folderId = null }: PhotoShellProps = {}) {
           onMove={handleMove}
           onDelete={handleDeletePhoto}
           onShare={handleShare}
-          onCopyUrl={handleCopyUrl}
         />
       </div>
     );
@@ -303,13 +304,21 @@ export function PhotoShell({ folderId = null }: PhotoShellProps = {}) {
       <PhotoShellToolbar
         activeTab={activeTab}
         albumName={albumName}
-        albumCount={folders.length}
         feedback={feedback}
         isCreatingAlbum={createFolder.isPending}
-        photoCount={photos.length}
+        isAlbumComposerOpen={isAlbumComposerOpen}
         onTabChange={setActiveTab}
         onAlbumNameChange={setAlbumName}
         onCreateAlbum={handleCreateAlbum}
+        onToggleAlbumComposer={() => {
+          setIsAlbumComposerOpen((current) => {
+            const next = !current;
+            if (!next) {
+              setAlbumName("");
+            }
+            return next;
+          });
+        }}
         onUpload={handleUpload}
       />
 
@@ -343,7 +352,6 @@ export function PhotoShell({ folderId = null }: PhotoShellProps = {}) {
         onMove={handleMove}
         onDelete={handleDeletePhoto}
         onShare={handleShare}
-        onCopyUrl={handleCopyUrl}
       />
     </div>
   );
