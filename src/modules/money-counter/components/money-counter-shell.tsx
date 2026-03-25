@@ -6,58 +6,47 @@ import { MONEY_DENOMINATIONS } from "@/core/constants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useAutosave } from "@/hooks/use-autosave";
 import { useLocalStorageState } from "@/hooks/use-local-storage-state";
-import { useCreateMoneySession, useMoneySessionItems, useMoneySessions, useUpsertMoneyItems } from "../hooks";
+import { useCreateMoneySession, useMoneySessions, useUpsertMoneyItems } from "../hooks";
+import type { MoneyItem } from "../types";
 
 const INACTIVITY_MS = 5 * 60 * 1000;
-const STORAGE_KEY = "money-counter-session-meta";
+const COUNTS_STORAGE_KEY = "money-counter-draft-counts";
+const META_STORAGE_KEY = "money-counter-draft-meta";
 
-type SessionMeta = {
-  trackedSessionId: string | null;
+type DraftMeta = {
   lastActivityAt: number | null;
 };
 
-const DEFAULT_META: SessionMeta = {
-  trackedSessionId: null,
+const DEFAULT_META: DraftMeta = {
   lastActivityAt: null
 };
 
+function formatHistoryTotal(items: MoneyItem[] | undefined) {
+  const total = (items ?? []).reduce((sum, item) => sum + item.denomination * item.quantity, 0);
+  return total.toLocaleString("vi-VN");
+}
+
+function formatHistoryBreakdown(items: MoneyItem[] | undefined) {
+  return (items ?? [])
+    .filter((item) => item.quantity > 0)
+    .sort((a, b) => b.denomination - a.denomination)
+    .map((item) => `${item.denomination.toLocaleString("vi-VN")}đ x ${item.quantity}`)
+    .join(" · ");
+}
+
 export function MoneyCounterShell() {
   const { data: sessions = [] } = useMoneySessions();
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const { data: items = [] } = useMoneySessionItems(sessionId);
   const createSession = useCreateMoneySession();
   const upsertItems = useUpsertMoneyItems();
-  const [sessionMeta, setSessionMeta] = useLocalStorageState<SessionMeta>(STORAGE_KEY, DEFAULT_META);
 
-  const [counts, setCounts] = useState<Record<number, number>>({});
+  const [counts, setCounts] = useLocalStorageState<Record<number, number>>(COUNTS_STORAGE_KEY, {});
+  const [draftMeta, setDraftMeta] = useLocalStorageState<DraftMeta>(META_STORAGE_KEY, DEFAULT_META);
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
 
-  const createSessionPromiseRef = useRef<Promise<string> | null>(null);
-  const rollingSessionRef = useRef(false);
+  const commitLockRef = useRef(false);
 
   const sortedDenoms = useMemo(() => [...MONEY_DENOMINATIONS].sort((a, b) => b - a), []);
-
-  useEffect(() => {
-    if (!sessionId && sessions.length > 0) {
-      setSessionId(sessions[0].id);
-    }
-  }, [sessionId, sessions]);
-
-  useEffect(() => {
-    if (!sessionId) return;
-    if (items.length === 0) {
-      setCounts({});
-      return;
-    }
-
-    const next: Record<number, number> = {};
-    items.forEach((item) => {
-      next[item.denomination] = item.quantity;
-    });
-    setCounts(next);
-  }, [items, sessionId]);
 
   const total = useMemo(() => {
     return MONEY_DENOMINATIONS.reduce((sum, denom) => {
@@ -71,95 +60,66 @@ export function MoneyCounterShell() {
     [counts]
   );
 
-  const ensureSessionId = async () => {
-    if (sessionId) return sessionId;
-    if (createSessionPromiseRef.current) return createSessionPromiseRef.current;
-
-    createSessionPromiseRef.current = createSession.mutateAsync().then((session) => {
-      setSessionId(session.id);
-      return session.id;
-    }).finally(() => {
-      createSessionPromiseRef.current = null;
-    });
-
-    return createSessionPromiseRef.current;
+  const resetDraft = () => {
+    setCounts({});
+    setDraftMeta(DEFAULT_META);
+    setStatus("idle");
   };
 
-  const markActivity = async () => {
-    const currentSessionId = await ensureSessionId();
-    setSessionMeta({
-      trackedSessionId: currentSessionId,
+  const markActivity = () => {
+    setDraftMeta({
       lastActivityAt: Date.now()
     });
-  };
-
-  const saveSession = async () => {
-    setStatus("saving");
-    let currentSessionId = sessionId;
-    if (!currentSessionId) {
-      const session = await createSession.mutateAsync();
-      currentSessionId = session.id;
-      setSessionId(session.id);
-    }
-
-    const payload = MONEY_DENOMINATIONS.map((denom) => ({
-      denomination: denom,
-      quantity: counts[denom] ?? 0
-    }));
-
-    await upsertItems.mutateAsync({ sessionId: currentSessionId, items: payload });
-    setStatus("saved");
-  };
-
-  const createFreshSession = async () => {
-    const session = await createSession.mutateAsync();
-    setSessionId(session.id);
-    setCounts({});
     setStatus("idle");
-    setSessionMeta(DEFAULT_META);
   };
 
-  const splitSessionIfInactive = async () => {
-    if (rollingSessionRef.current) return;
-    if (!sessionId) return;
-    if (sessionMeta.trackedSessionId !== sessionId || !sessionMeta.lastActivityAt) return;
-    if (Date.now() - sessionMeta.lastActivityAt < INACTIVITY_MS) return;
+  const saveHistoryAndReset = async () => {
+    if (commitLockRef.current || !hasAnyCount) return;
 
-    rollingSessionRef.current = true;
+    commitLockRef.current = true;
+    setStatus("saving");
+
     try {
-      if (hasAnyCount) {
-        await saveSession();
-      }
-      await createFreshSession();
+      const session = await createSession.mutateAsync();
+      const payload = MONEY_DENOMINATIONS.map((denom) => ({
+        denomination: denom,
+        quantity: counts[denom] ?? 0
+      }));
+
+      await upsertItems.mutateAsync({ sessionId: session.id, items: payload });
+      resetDraft();
+      setStatus("saved");
     } finally {
-      rollingSessionRef.current = false;
+      commitLockRef.current = false;
     }
+  };
+
+  const commitIfInactive = async () => {
+    if (!hasAnyCount || !draftMeta.lastActivityAt) return;
+    if (Date.now() - draftMeta.lastActivityAt < INACTIVITY_MS) return;
+    await saveHistoryAndReset();
   };
 
   useEffect(() => {
-    if (!sessionId) return;
-    if (sessionMeta.trackedSessionId !== sessionId || !sessionMeta.lastActivityAt) return;
+    if (!hasAnyCount || !draftMeta.lastActivityAt) return;
 
-    const timeout = sessionMeta.lastActivityAt + INACTIVITY_MS - Date.now();
+    const timeout = draftMeta.lastActivityAt + INACTIVITY_MS - Date.now();
     if (timeout <= 0) {
-      void splitSessionIfInactive();
+      void commitIfInactive();
       return;
     }
 
     const handle = window.setTimeout(() => {
-      void splitSessionIfInactive();
+      void commitIfInactive();
     }, timeout);
 
     return () => window.clearTimeout(handle);
-  }, [sessionId, sessionMeta, hasAnyCount]);
+  }, [hasAnyCount, draftMeta.lastActivityAt, counts]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden" && hasAnyCount) {
-        void saveSession();
-      }
       if (document.visibilityState === "visible") {
-        void splitSessionIfInactive();
+        void commitIfInactive();
       }
     };
 
@@ -167,25 +127,12 @@ export function MoneyCounterShell() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [sessionId, sessionMeta, hasAnyCount]);
-
-  useEffect(() => {
-    const handlePageHide = () => {
-      if (hasAnyCount) {
-        void saveSession();
-      }
-    };
-
-    window.addEventListener("pagehide", handlePageHide);
-    return () => {
-      window.removeEventListener("pagehide", handlePageHide);
-    };
-  }, [hasAnyCount, counts, sessionId]);
+  }, [hasAnyCount, draftMeta.lastActivityAt, counts]);
 
   const handleChange = (denom: number, value: string) => {
     const qty = Math.max(0, Number.parseInt(value || "0", 10));
     setCounts((prev) => ({ ...prev, [denom]: Number.isNaN(qty) ? 0 : qty }));
-    void markActivity();
+    markActivity();
   };
 
   const changeCountByStep = (denom: number, step: number) => {
@@ -193,20 +140,12 @@ export function MoneyCounterShell() {
       ...prev,
       [denom]: Math.max(0, (prev[denom] ?? 0) + step)
     }));
-    void markActivity();
+    markActivity();
   };
 
   const handleReset = () => {
-    setCounts({});
-    setStatus("idle");
-    void markActivity();
+    resetDraft();
   };
-
-  const handleNewSession = async () => {
-    await createFreshSession();
-  };
-
-  useAutosave(saveSession, 15000, [counts, sessionId]);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4 rounded-3xl bg-background/60 p-4 shadow-sm ring-1 ring-border/40">
@@ -221,7 +160,7 @@ export function MoneyCounterShell() {
           <Button
             size="sm"
             variant="ghost"
-            className="rounded-full px-3 text-[11px] text-muted hover:text-text bg-card/60"
+            className="rounded-full bg-card/60 px-3 text-[11px] text-muted hover:text-text"
             onClick={handleReset}
           >
             Reset
@@ -230,17 +169,10 @@ export function MoneyCounterShell() {
             size="sm"
             variant="secondary"
             className="rounded-full px-4 text-xs font-medium shadow-sm"
-            onClick={() => void saveSession()}
+            onClick={() => void saveHistoryAndReset()}
+            disabled={!hasAnyCount || status === "saving"}
           >
-            Lưu ngay
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="rounded-full px-4 text-xs font-medium shadow-sm"
-            onClick={() => void handleNewSession()}
-          >
-            Tạo phiên
+            Lưu lịch sử
           </Button>
         </div>
       </div>
@@ -265,7 +197,7 @@ export function MoneyCounterShell() {
                   type="number"
                   min={0}
                   inputMode="numeric"
-                  className="h-8 w-16 px-1 rounded-2xl border-border/80 bg-background text-center text-sm font-medium"
+                  className="h-8 w-16 rounded-2xl border-border/80 bg-background px-1 text-center text-sm font-medium"
                   value={counts[denom] ?? ""}
                   onChange={(event) => handleChange(denom, event.target.value)}
                   placeholder="0"
@@ -287,37 +219,39 @@ export function MoneyCounterShell() {
 
       <p className="text-[11px] text-muted">
         {status === "saving"
-          ? "Đang lưu phiên..."
+          ? "Đang lưu lịch sử..."
           : status === "saved"
-            ? "Đã lưu tự động."
-            : "Tự lưu sau 15 giây. Sau 5 phút không đổi sẽ tách phiên mới."}
+            ? "Đã lưu lịch sử và reset."
+            : "Sau 5 phút không thay đổi, app sẽ tự lưu lịch sử và reset."}
       </p>
 
       <div className="flex w-full flex-col gap-3 rounded-2xl bg-card/70 p-3 ring-1 ring-border/40">
         <div className="flex items-center justify-between">
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted">Phiên đã lưu</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted">Lịch sử đã lưu</p>
         </div>
         <div className="space-y-2">
           {sessions.length === 0 ? (
-            <p className="text-[12px] text-muted">Chưa có phiên nào.</p>
+            <p className="text-[12px] text-muted">Chưa có lịch sử nào.</p>
           ) : (
-            sessions.map((session) => (
-              <button
-                key={session.id}
-                type="button"
-                onClick={() => setSessionId(session.id)}
-                className={`w-full rounded-xl px-3 py-2 text-left text-[12px] transition ${
-                  sessionId === session.id ? "bg-amber-500 text-[#0c0f18]" : "bg-background/80 text-text"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span>{new Date(session.created_at).toLocaleDateString("vi-VN")}</span>
-                  <span className="text-[10px] opacity-70">
-                    {new Date(session.updated_at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
-                  </span>
+            sessions.map((session) => {
+              const breakdown = formatHistoryBreakdown(session.money_items);
+
+              return (
+                <div key={session.id} className="rounded-xl bg-background/80 px-3 py-2 text-[12px] text-text">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>
+                      {new Date(session.updated_at).toLocaleDateString("vi-VN")}{" "}
+                      {new Date(session.updated_at).toLocaleTimeString("vi-VN", {
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      })}
+                    </span>
+                    <span className="font-medium">{formatHistoryTotal(session.money_items)} đ</span>
+                  </div>
+                  {breakdown ? <p className="mt-1 text-[11px] text-muted">{breakdown}</p> : null}
                 </div>
-              </button>
-            ))
+              );
+            })
           )}
         </div>
       </div>

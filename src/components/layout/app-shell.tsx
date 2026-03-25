@@ -13,9 +13,9 @@ export function AppShell({ title, subtitle, actions, children, className }: AppS
   return (
     <div className={cn("min-h-screen px-4 py-6 sm:px-6 lg:px-10", className)}>
       <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        {title && <div>
           <h1 className="font-display text-3xl font-semibold text-text">{title}</h1>
-        </div>
+        </div>}
       </header>
       {children}
     </div>

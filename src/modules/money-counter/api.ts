@@ -35,7 +35,7 @@ export async function fetchLatestSession() {
 export async function fetchMoneySessions() {
   const { data, error } = await supabase
     .from("money_sessions")
-    .select("id, user_id, created_at, updated_at")
+    .select("id, user_id, created_at, updated_at, money_items(id, session_id, denomination, quantity)")
     .order("updated_at", { ascending: false })
     .limit(20);
   if (error) throw error;
